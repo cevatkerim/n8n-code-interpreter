@@ -32,7 +32,7 @@ The service consists of:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/python-sandbox-service.git
+   git clone https://github.com/cevatkerim/n8n-code-interpreter.git
    cd python-sandbox-service
    ```
 
@@ -405,7 +405,3 @@ Uploaded files are temporary and will be deleted after 24 hours unless specified
 - The service uses a named volume `job-storage` for sharing files between containers
 - File operations use a combined fs module approach (promises for most operations, sync for streams)
 - The PostgreSQL database schema includes tables for jobs and generated files
-
-## License
-
-[Specify license here] 

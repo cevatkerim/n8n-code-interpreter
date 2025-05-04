@@ -1,0 +1,41 @@
+FROM python:3.11-alpine
+
+# Install basic system dependencies and build tools
+RUN apk add --no-cache \
+    curl \
+    ca-certificates \
+    gcc \
+    musl-dev \
+    python3-dev \
+    jpeg-dev \
+    zlib-dev \
+    libffi-dev \
+    cairo-dev \
+    pkgconfig \
+    g++
+
+# Create non-root user
+RUN addgroup -S pythonuser && adduser -S pythonuser -G pythonuser
+
+# Create data directory
+RUN mkdir -p /data && chown pythonuser:pythonuser /data
+
+# Install common Python packages
+RUN pip install --no-cache-dir \
+    numpy \
+    pandas \
+    matplotlib \
+    scikit-learn \
+    requests \
+    beautifulsoup4 \
+    pillow
+
+# Setup working directory
+WORKDIR /app
+RUN chown pythonuser:pythonuser /app
+
+# Switch to non-root user
+USER pythonuser
+
+# Command will be provided at runtime
+CMD ["python", "-c", "print('Container is ready')"] 

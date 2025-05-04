@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  python-sandbox-service-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: python-sandbox-service-dev
+    restart: always
+    ports:
+      - "3004:3003"
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+      - job-storage:/app/storage
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/sandbox
+    privileged: true  # Required for Docker-in-Docker operations
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: python-sandbox-postgres-dev
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=sandbox
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  python-sandbox:
+    build:
+      context: .
+      dockerfile: sandbox.Dockerfile
+    image: python-sandbox:latest
+    volumes:
+      - job-storage:/workspace
+    profiles:
+      - build-only
+
+volumes:
+  sqlite-data:
+  file-storage:
+  postgres_data:
+  job-storage: 

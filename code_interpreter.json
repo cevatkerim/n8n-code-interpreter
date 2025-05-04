@@ -1,0 +1,289 @@
+{
+  "name": "code interpreter",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Parse the incoming request\n// const requestBody = $node[\"Webhook\"].json.body;\nlet pythonCode = $input.first().json.code\n\n// Default to a simple print statement if no code provided\nif (!pythonCode) {\n  pythonCode = 'print(\"Hello from Python Sandbox\")';\n}\n\n// Extract other parameters if provided\nconst dataUrls = $input.first().json.dataUrls || [];\nconst packages = $input.first().json.packages || [];\n\n// Prepare the payload for Python Sandbox Service\nreturn {\n  json: {\n    code: pythonCode,\n    data_urls: dataUrls,\n    packages: packages,\n    timeout: 60,\n    resource_limits: { memory: 512, cpu: 1 }\n  }\n};\n"
+      },
+      "id": "c21a2a5d-a3ce-4f71-afe5-51158122009b",
+      "name": "Prepare Job Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        -980,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://python-sandbox-service:3003/api/jobs",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "code",
+              "value": "={{ $json.code }}"
+            },
+            {
+              "name": "data_urls",
+              "value": "={{ $json.data_urls }}"
+            },
+            {
+              "name": "packages",
+              "value": "={{ $json.packages }}"
+            },
+            {
+              "name": "timeout",
+              "value": "={{ $json.timeout }}"
+            },
+            {
+              "name": "resource_limits",
+              "value": "={{ $json.resource_limits }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2250c9a6-14ea-4e48-9049-4a5e150e7a56",
+      "name": "Submit Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -800,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "job_id",
+              "value": "={{ $json.job_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c4764094-e851-4e56-9def-3d7a0bce7a8c",
+      "name": "Extract Job ID",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ \"http://python-sandbox-service:3003/api/jobs/\" + $json.job_id + \"/status\" }}",
+        "options": {}
+      },
+      "id": "740e1aef-0a70-4939-bbd0-f519271332bd",
+      "name": "Check Job Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -260,
+        -560
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "notEqual",
+              "value2": "completed"
+            },
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "notEqual",
+              "value2": "failed"
+            }
+          ]
+        }
+      },
+      "id": "670f7e4e-9da0-4d25-bacb-3181f47c00f4",
+      "name": "Is Job Running?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ \"http://python-sandbox-service:3003/api/jobs/\" + $json.job_id + \"/results\" }}",
+        "options": {}
+      },
+      "id": "72869db6-0ec4-4be9-981a-696357d0769a",
+      "name": "Get Job Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        220,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create our response object\nconst response = {\n  success: $json.status === 'completed',\n  status: $json.status,\n  stdout: $json.stdout || '',\n  stderr: $json.stderr || '',\n  execution_time: $json.execution_time || 0,\n  files: []\n};\n\n// If there are files, we'll need to process them\nif ($json.files && $json.files.length > 0) {\n  // We won't actually download the files here to keep this simpler\n  // Just include their metadata and URLs\n  $json.files.forEach(file => {\n    response.files.push({\n      filename: file.filename,\n      content_type: file.content_type,\n      size: file.size,\n      url: `http://localhost:3003/api/jobs/${$json.job_id}/files/${file.id}`\n    });\n  });\n}\n\nreturn { json: response };"
+      },
+      "id": "941760d5-e995-4897-b406-512dd96bcaa7",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        480,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "code"
+            },
+            {
+              "name": "dataUrls",
+              "type": "array"
+            },
+            {
+              "name": "packages",
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1200,
+        -400
+      ],
+      "id": "e05afdc4-ad39-4db9-99bb-c69fb91ccb42",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "code": "total = 0\nfor number in range(1, 11):\n    total += number\nprint(total)",
+          "dataUrls": null,
+          "packages": null
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Prepare Job Payload": {
+      "main": [
+        [
+          {
+            "node": "Submit Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit Job": {
+      "main": [
+        [
+          {
+            "node": "Extract Job ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Job ID": {
+      "main": [
+        [
+          {
+            "node": "Check Job Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Job Status": {
+      "main": [
+        [
+          {
+            "node": "Is Job Running?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Is Job Running?": {
+      "main": [
+        [
+          {
+            "node": "Check Job Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Job Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job Results": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        []
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Job Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "76b474ee-ab77-4ee3-a17f-b71dcc852911",
+  "meta": {
+    "instanceId": "989dd790a081b9868622eb739f7c94986eb5c227a0d9767a30025dc294775137"
+  },
+  "id": "BcOgzOjNDjZ10gCm",
+  "tags": []
+}
